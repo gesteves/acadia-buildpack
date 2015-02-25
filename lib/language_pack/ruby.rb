@@ -93,7 +93,7 @@ class LanguagePack::Ruby < LanguagePack::Base
         post_bundler
         create_database_yml
         install_binaries
-        run_assets_precompile_rake_task
+        run_publish_rake_task
       end
       super
     end
@@ -750,6 +750,33 @@ params = CGI.parse(uri.query || "")
         precompile_fail(precompile.output)
       end
     end
+  end
+
+  def run_publish_rake_task
+    instrument 'ruby.run_publish_rake_task' do
+
+      publish = rake.task("publish")
+      return true unless publish.is_defined?
+
+      if ENV["AWS_ACCESS_KEY_ID"].nil? || ENV["AWS_SECRET_ACCESS_KEY_ID"].nil?
+        puts "Skipping site publishing since AWS credentials are not defined."
+        return
+      end
+
+      topic "Publishing site to S3"
+      publish.invoke(env: rake_env)
+      if publish.success?
+        puts "Site publishing completed (#{"%.2f" % publish.time}s)"
+      else
+        publish_fail
+      end
+    end
+  end
+
+  def publish_fail
+    log "publish", :status => "failure"
+    msg = "Site publishing failed."
+    error msg
   end
 
   def precompile_fail(output)
